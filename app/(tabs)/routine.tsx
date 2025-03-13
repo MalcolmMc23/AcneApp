@@ -204,7 +204,7 @@ export default function RoutineScreen() {
         <View style={styles.streaksContainer}>
           <View style={styles.streaksLabel}>
             <Text style={styles.streaksText}>Streaks</Text>
-            <FontAwesome name="fire" size={20} color="#FF9500" />
+            <FontAwesome name="fire" size={20} color={Colors.light.tint} />
           </View>
           <View style={styles.streaksValue}>
             <Text style={styles.streaksCount}>{streakCount}</Text>
@@ -364,7 +364,7 @@ const styles = StyleSheet.create({
     marginRight: Theme.spacing.xs,
   },
   streaksValue: {
-    backgroundColor: Colors.light.accent,
+    backgroundColor: Colors.light.tint,
     paddingVertical: Theme.spacing.sm,
     paddingHorizontal: Theme.spacing.xl,
     borderRadius: Theme.borderRadius.lg,
@@ -403,7 +403,7 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: "100%",
-    backgroundColor: Colors.light.accent,
+    backgroundColor: Colors.light.tint,
     borderRadius: Theme.borderRadius.circle,
   },
   taskList: {

@@ -117,17 +117,6 @@ export default function HomeScreen() {
           </View>
         </Card>
       </ScrollView>
-
-      <View style={styles.bottomButtonContainer}>
-        <Button
-          label="Go to My Routine"
-          variant="primary"
-          size="lg"
-          leftIcon={<Ionicons name="list-outline" size={22} color="#fff" />}
-          onPress={navigateToRoutine}
-          fullWidth
-        />
-      </View>
     </SafeAreaView>
   );
 }
@@ -195,11 +184,5 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Theme.typography.fontSizes.md,
     color: Colors.light.text,
-  },
-  bottomButtonContainer: {
-    padding: Theme.spacing.lg,
-    backgroundColor: Colors.light.background,
-    borderTopWidth: 1,
-    borderTopColor: Colors.light.border,
   },
 });
