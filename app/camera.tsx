@@ -23,22 +23,18 @@ import * as FileSystem from "expo-file-system";
 import * as Haptics from "expo-haptics";
 import * as ImageManipulator from "expo-image-manipulator";
 import { Ionicons } from "@expo/vector-icons";
-import OpenAI from "openai";
 import Constants from "expo-constants";
 import { Theme, Colors } from "@/constants/Colors";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { analyzeImageWithEnhancement } from "@/utils/aiHelper";
+import {
+  analyzeImageWithEnhancement,
+  analyzeImageForTasks,
+  generatePersonalizedTasks,
+} from "../utils/aiHelper";
 import AnalysisResult from "@/components/AnalysisResult";
-
-// Initialize OpenAI client
-// You'll need to add your OpenAI API key in app.config.js or as an environment variable
-const openai = new OpenAI({
-  apiKey:
-    Constants.expoConfig?.extra?.openAIApiKey ||
-    process.env.EXPO_PUBLIC_OPENAI_API_KEY,
-  dangerouslyAllowBrowser: true, // Required for React Native
-});
+import openai from "../utils/openai";
+import taskStorage from "../utils/taskStorage";
 
 // Add function to optimize image for analysis
 const optimizeImageForAnalysis = async (imageUri: string): Promise<string> => {
@@ -70,12 +66,65 @@ export default function CameraScreen() {
   const [analyzing, setAnalyzing] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<string | null>(null);
+  const [personalizedTasks, setPersonalizedTasks] = useState<Array<{
+    id: string;
+    text: string;
+    completed: boolean;
+  }> | null>(null);
   const cameraRef = useRef<CameraView>(null);
   const router = useRouter();
 
   useEffect(() => {
     requestPermission();
   }, []);
+
+  // Add a function to generate test tasks without using OpenAI
+  const generateTestTasks = () => {
+    setAnalyzing(true);
+
+    // Simple delay to simulate analysis
+    setTimeout(() => {
+      // Create a set of test tasks with proper categories
+      const testTasks = [
+        {
+          id: "morning_1",
+          text: "TEST - Wash face with gentle cleanser 🌞",
+          completed: false,
+        },
+        {
+          id: "morning_2",
+          text: "TEST - Apply sunscreen SPF 30+ 🌞",
+          completed: false,
+        },
+        {
+          id: "evening_1",
+          text: "TEST - Double cleanse with oil cleanser 🌙",
+          completed: false,
+        },
+        {
+          id: "evening_2",
+          text: "TEST - Apply retinol serum 🌙",
+          completed: false,
+        },
+        {
+          id: "weekly_1",
+          text: "TEST - Use clay mask once a week 📅",
+          completed: false,
+        },
+      ];
+
+      // Set test tasks and analysis result
+      setPersonalizedTasks(testTasks);
+      setAnalysisResult(
+        "This is a test analysis result to verify the task passing functionality."
+      );
+      setAnalyzing(false);
+
+      // Success feedback
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      console.log("Test tasks generated successfully", testTasks);
+    }, 1500);
+  };
 
   const takePicture = async () => {
     if (cameraRef.current) {
@@ -152,20 +201,110 @@ export default function CameraScreen() {
         }
       );
 
-      // Use the image analysis utility (without enhancement)
-      const result = await analyzeImageWithEnhancement(openai, base64Image);
+      // Step 1: Generate tasks using the structured format method
+      console.log("Generating personalized tasks in structured format...");
+      let tasks = null;
 
-      // Update the UI with the analysis result
-      setAnalysisResult(result);
+      try {
+        // The analyzeImageForTasks function now handles multiple attempts to get properly formatted tasks
+        tasks = await analyzeImageForTasks(openai, base64Image);
+
+        if (!tasks || tasks.length === 0) {
+          throw new Error("Task generation failed - no tasks returned");
+        }
+
+        console.log(`Successfully generated ${tasks.length} structured tasks`);
+      } catch (taskError) {
+        console.error("Error generating structured tasks:", taskError);
+        tasks = null;
+      }
+
+      // DEBUGGING: Log task generation attempts
+      console.log("------ TASK GENERATION DEBUGGING ------");
+      console.log(
+        "Step 1: Generated tasks using structured format:",
+        tasks ? `Success - ${tasks.length} tasks` : "Failed - No tasks"
+      );
+
+      // Step 2: Get the general skin analysis
+      const analysisResult = await analyzeImageWithEnhancement(
+        openai,
+        base64Image
+      );
+
+      // Step 3: If structured tasks failed, try to extract tasks from the general analysis
+      if (!tasks || tasks.length === 0) {
+        console.log("Attempting to generate tasks from general analysis...");
+        try {
+          tasks = generatePersonalizedTasks(analysisResult);
+          console.log(
+            "Step 2: Generated tasks from general analysis:",
+            tasks?.length
+              ? `Success - ${tasks.length} tasks`
+              : "Failed - No tasks"
+          );
+        } catch (fallbackError) {
+          console.error("Error generating fallback tasks:", fallbackError);
+        }
+      }
+
+      // Step 4: If we still don't have tasks, create basic ones
+      if (!tasks || tasks.length === 0) {
+        console.warn(
+          "Step 3: All task generation methods failed, using basic tasks"
+        );
+        tasks = [
+          {
+            id: "morning_1",
+            text: "Cleanse with gentle cleanser 🌞",
+            completed: false,
+          },
+          { id: "morning_2", text: "Apply moisturizer 🌞", completed: false },
+          {
+            id: "morning_3",
+            text: "Apply sunscreen SPF 30+ 🌞",
+            completed: false,
+          },
+          {
+            id: "evening_1",
+            text: "Double cleanse to remove sunscreen/makeup 🌙",
+            completed: false,
+          },
+          {
+            id: "evening_2",
+            text: "Apply treatment for your skin concerns 🌙",
+            completed: false,
+          },
+          {
+            id: "evening_3",
+            text: "Apply night moisturizer 🌙",
+            completed: false,
+          },
+          {
+            id: "weekly_1",
+            text: "Use gentle exfoliant 1-2 times per week 📅",
+            completed: false,
+          },
+        ];
+        console.log("Using default tasks:", tasks.length);
+      }
+
+      // Store the tasks and analysis result
+      setPersonalizedTasks(tasks);
+      setAnalysisResult(analysisResult);
+
+      // Success feedback
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      console.log("Image analysis complete with structured tasks");
     } catch (error) {
       console.error("Error analyzing image:", error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Error", "Failed to analyze image. Please try again.");
-      setAnalysisResult(null);
+      Alert.alert(
+        "Analysis Error",
+        "We encountered a problem analyzing your skin. Please try again or use a clearer photo."
+      );
     } finally {
       setAnalyzing(false);
-      setOptimizing(false);
     }
   };
 
@@ -173,6 +312,7 @@ export default function CameraScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setPhotoUri(null);
     setAnalysisResult(null);
+    setPersonalizedTasks(null);
   };
 
   const goBack = () => {
@@ -182,12 +322,86 @@ export default function CameraScreen() {
 
   const goToRoutine = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    // DEBUGGING: Add detailed console logs
+    console.log(
+      "Before serialization - personalizedTasks:",
+      personalizedTasks
+        ? `Found ${personalizedTasks.length} tasks`
+        : "No tasks available"
+    );
+
+    // DEBUGGING: Add fallback test tasks if none were generated
+    let tasksToUse = personalizedTasks;
+    if (!tasksToUse || tasksToUse.length === 0) {
+      console.log(
+        "⚠️ No tasks were generated by AI, using test tasks for debugging"
+      );
+      tasksToUse = [
+        {
+          id: "test_morning_1",
+          text: "TEST - Morning cleansing 🌞",
+          completed: false,
+        },
+        {
+          id: "test_evening_1",
+          text: "TEST - Evening moisturizing 🌙",
+          completed: false,
+        },
+        {
+          id: "test_weekly_1",
+          text: "TEST - Weekly exfoliation 📅",
+          completed: false,
+        },
+      ];
+      // Update the state for UI feedback
+      setPersonalizedTasks(tasksToUse);
+    }
+
     // Generate a unique photo ID for this analysis
-    const photoId = Date.now().toString();
-    router.push({
-      pathname: "/routine",
-      params: { photoId },
-    });
+    const photoId = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    console.log("Navigating to routine with photo ID:", photoId);
+
+    // Store tasks using multiple methods for reliability
+    try {
+      // 1. Use our new task storage utility (persists to AsyncStorage)
+      taskStorage.storeLatestTasks(tasksToUse, photoId).then((success) => {
+        if (!success) {
+          console.warn(
+            "Task storage utility failed, falling back to basic methods"
+          );
+        }
+      });
+
+      // 2. Store in global variables as immediate backup
+      global.latestTasks = tasksToUse;
+      global.latestPhotoId = photoId;
+
+      // 3. Also serialize for URL params as final fallback
+      const serializedTasks = JSON.stringify(tasksToUse);
+
+      console.log("Triple-redundant task storage complete");
+
+      // Navigate to routine screen
+      router.push({
+        pathname: "/routine",
+        params: {
+          useLatestTasks: "true",
+          photoId, // Include photoId in URL as well
+          taskCount: tasksToUse.length.toString(), // Add task count as a simple check
+          personalizedTasks: serializedTasks, // Keep this as fallback
+        },
+      });
+    } catch (error) {
+      console.error("Error in task storage or navigation:", error);
+
+      // If all else fails, show error to user
+      Alert.alert(
+        "Navigation Error",
+        "There was a problem saving your routine. Please try again.",
+        [{ text: "OK" }]
+      );
+    }
   };
 
   return (
@@ -329,6 +543,17 @@ export default function CameraScreen() {
                         <Ionicons name="scan-outline" size={20} color="#fff" />
                       }
                       style={styles.analyzeButton}
+                    />
+                    <Button
+                      label="Generate Test Tasks (Debug)"
+                      onPress={generateTestTasks}
+                      fullWidth
+                      leftIcon={
+                        <Ionicons name="bug-outline" size={20} color="#fff" />
+                      }
+                      variant="outline"
+                      style={{ marginTop: 8, borderColor: "#ff9500" }}
+                      textStyle={{ color: "#ff9500" }}
                     />
                     <Button
                       label="Take New Photo"
