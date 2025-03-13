@@ -15,13 +15,18 @@ module.exports = {
             "**/*"
         ],
         ios: {
-            supportsTablet: true
+            supportsTablet: true,
+            infoPlist: {
+                NSCameraUsageDescription: "This app uses the camera to analyze your skin condition and provide personalized recommendations.",
+                NSPhotoLibraryUsageDescription: "This app saves photos to provide personalized skin analysis."
+            }
         },
         android: {
             adaptiveIcon: {
                 foregroundImage: "./assets/images/adaptive-icon.png",
                 backgroundColor: "#ffffff"
-            }
+            },
+            permissions: ["CAMERA"]
         },
         extra: {
             // Add your OpenAI API key here for development
@@ -32,7 +37,7 @@ module.exports = {
             [
                 "expo-camera",
                 {
-                    cameraPermission: "Allow $(PRODUCT_NAME) to access your camera"
+                    cameraPermission: "Allow $(PRODUCT_NAME) to access your camera to analyze your skin"
                 }
             ]
         ],

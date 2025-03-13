@@ -10,13 +10,13 @@ import {
   SafeAreaView,
   Platform,
   Animated,
+  TouchableOpacity,
 } from "react-native";
 import {
   CameraView,
   CameraCapturedPicture,
   useCameraPermissions,
 } from "expo-camera";
-import * as FaceDetector from "expo-face-detector";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import * as FileSystem from "expo-file-system";
@@ -64,18 +64,6 @@ const optimizeImageForAnalysis = async (imageUri: string): Promise<string> => {
   }
 };
 
-// Check if the image has detectable faces
-const checkFaceDetection = async (imageUri: string): Promise<boolean> => {
-  try {
-    const options = { mode: FaceDetector.FaceDetectorMode.fast };
-    const detected = await FaceDetector.detectFacesAsync(imageUri, options);
-    return detected.faces.length > 0;
-  } catch (error) {
-    console.error("Face detection error:", error);
-    return true; // Continue with analysis even if face detection fails
-  }
-};
-
 export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -84,53 +72,55 @@ export default function CameraScreen() {
   const [analysisResult, setAnalysisResult] = useState<string | null>(null);
   const cameraRef = useRef<CameraView>(null);
   const router = useRouter();
-  const pulseAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     requestPermission();
-
-    // Setup pulse animation for face guide
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 0,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
   }, []);
 
   const takePicture = async () => {
     if (cameraRef.current) {
       try {
+        console.log("Taking picture...");
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
         // Take the picture with highest quality settings
-        const photo = await cameraRef.current.takePictureAsync({
-          quality: 1, // Maximum quality (0 to 1)
-          skipProcessing: false, // Ensure proper orientation
-          exif: true, // Include EXIF data
-          base64: false, // Don't encode as base64 here for better performance
-          imageType: "jpg", // Use JPEG format for better detail in skin tones
-          isImageMirror: true, // Mirror image for front camera (more natural for selfies)
-        });
+        const photo: CameraCapturedPicture | undefined =
+          await cameraRef.current.takePictureAsync({
+            quality: 0.8, // Slightly reduced quality for better performance
+            skipProcessing: false, // Ensure proper orientation
+            exif: true, // Include EXIF data
+            base64: false, // Don't encode as base64 here for better performance
+            imageType: "jpg", // Use JPEG format for better detail in skin tones
+            isImageMirror: true, // Mirror image for front camera (more natural for selfies)
+          });
 
-        if (photo) {
+        console.log(
+          "Picture taken successfully:",
+          photo?.uri ? "URI exists" : "No URI"
+        );
+
+        if (photo && photo.uri) {
           setPhotoUri(photo.uri);
           // Reset analysis state when taking a new picture
           setAnalysisResult(null);
+        } else {
+          console.error("Photo object is missing URI");
+          Alert.alert("Error", "Failed to save photo. Please try again.");
         }
       } catch (error) {
         console.error("Error taking picture:", error);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        Alert.alert("Error", "Failed to take picture");
+        Alert.alert(
+          "Error",
+          "Failed to take picture. Please check camera permissions and try again."
+        );
       }
+    } else {
+      console.error("Camera reference is not available");
+      Alert.alert(
+        "Error",
+        "Camera is not ready. Please restart the app and try again."
+      );
     }
   };
 
@@ -149,20 +139,7 @@ export default function CameraScreen() {
         );
       }
 
-      // Check if face is detected in the image
-      const hasFace = await checkFaceDetection(photoUri);
-      if (!hasFace) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        Alert.alert(
-          "No Face Detected",
-          "We couldn't detect a face in your photo. Please take another photo with clearer lighting and make sure your face is in the frame.",
-          [{ text: "OK" }]
-        );
-        setAnalyzing(false);
-        setOptimizing(false);
-        return;
-      }
-
+      // Always proceed with analysis, we don't care if it's a face or not
       // Optimize the image for better detail extraction
       const optimizedImageUri = await optimizeImageForAnalysis(photoUri);
       setOptimizing(false);
@@ -238,7 +215,19 @@ export default function CameraScreen() {
       ) : !photoUri ? (
         // Camera view
         <View style={styles.cameraContainer}>
-          <CameraView ref={cameraRef} style={styles.camera} facing={"front"}>
+          <CameraView
+            ref={cameraRef}
+            style={styles.camera}
+            facing={"front"}
+            onMountError={(error) => {
+              console.error("Camera mount error:", error);
+              Alert.alert(
+                "Camera Error",
+                "There was a problem accessing your camera. Please restart the app and try again."
+              );
+            }}
+            onCameraReady={() => console.log("Camera is ready")}
+          >
             <View style={styles.cameraOverlay}>
               <View style={styles.cameraHeader}>
                 <Button
@@ -258,52 +247,32 @@ export default function CameraScreen() {
                 <View style={{ width: 60 }} />
               </View>
 
-              {/* Enhanced lighting instructions for better photos */}
+              {/* Simplified photo tips without face positioning guidance */}
               <View style={styles.lightingTips}>
                 <Text style={styles.lightingTipsText}>For best analysis:</Text>
                 <Text style={styles.lightingTipsText}>
                   • Use natural daylight or bright, even lighting
                 </Text>
                 <Text style={styles.lightingTipsText}>
-                  • Position face directly toward camera
+                  • Take a clear photo of the skin area
                 </Text>
-                <Text style={styles.lightingTipsText}>
-                  • Avoid shadows on your face
-                </Text>
-              </View>
-
-              {/* Enhanced face alignment guide */}
-              <View style={styles.faceGuideContainer}>
-                <Animated.View
-                  style={[
-                    styles.faceGuide,
-                    {
-                      transform: [
-                        {
-                          scale: pulseAnim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [1, 1.05],
-                          }),
-                        },
-                      ],
-                      opacity: pulseAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0.7, 1],
-                      }),
-                    },
-                  ]}
-                />
-                <Text style={styles.guideText}>Align face here</Text>
               </View>
 
               <View style={styles.cameraFooter}>
-                <Button
-                  label=""
-                  variant="ghost"
+                <TouchableOpacity
                   style={styles.captureButton}
                   onPress={takePicture}
-                  hapticStyle={Haptics.ImpactFeedbackStyle.Medium}
-                />
+                  activeOpacity={0.7}
+                >
+                  <View
+                    style={{
+                      width: 60,
+                      height: 60,
+                      borderRadius: 30,
+                      backgroundColor: "#fff",
+                    }}
+                  />
+                </TouchableOpacity>
               </View>
             </View>
           </CameraView>
@@ -605,31 +574,13 @@ const styles = StyleSheet.create({
     marginTop: Theme.spacing.md,
   },
   faceGuideContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    padding: Theme.spacing.md,
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 5,
+    // Keeping the property but emptying the style
+    // (in case it's referenced elsewhere)
   },
   faceGuide: {
-    width: 240,
-    height: 320,
-    borderRadius: 160,
-    borderWidth: 2,
-    borderColor: "rgba(255, 255, 255, 0.7)",
-    backgroundColor: "transparent",
+    // Keeping the property but emptying the style
   },
   guideText: {
-    color: "#fff",
-    fontSize: Theme.typography.fontSizes.sm,
-    marginTop: Theme.spacing.xl,
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.sm,
-    borderRadius: Theme.borderRadius.md,
+    // Keeping the property but emptying the style
   },
 });
