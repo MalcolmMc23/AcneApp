@@ -150,51 +150,42 @@ export default function CameraScreen() {
     router.back();
   };
 
-  if (!permission?.granted) {
-    // Camera permissions are not granted yet
-    return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar style="light" />
+  const goToRoutine = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    // Generate a unique photo ID for this analysis
+    const photoId = Date.now().toString();
+    router.push({
+      pathname: "/routine",
+      params: { photoId },
+    });
+  };
+
+  return (
+    <View style={styles.container}>
+      {!permission?.granted ? (
+        // Camera permission not granted
         <View style={styles.permissionContainer}>
-          <Text style={styles.permissionTitle}>Camera Access Required</Text>
+          <Text style={styles.permissionTitle}>Camera Access Needed</Text>
           <Text style={styles.permissionText}>
-            We need camera access to analyze your skin. Your photos are only
-            used for analysis and are not stored permanently.
+            We need camera access to analyze your skin and provide personalized
+            recommendations.
           </Text>
           <Button
-            label="Grant Camera Permission"
+            label="Grant Permission"
             onPress={requestPermission}
             style={styles.permissionButton}
           />
           <Button
             label="Go Back"
-            variant="outline"
+            variant="ghost"
             onPress={goBack}
             style={styles.backButton}
           />
         </View>
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <View style={styles.container}>
-      <StatusBar style="light" />
-
-      {!photoUri ? (
+      ) : !photoUri ? (
         // Camera view
         <View style={styles.cameraContainer}>
-          <CameraView
-            ref={cameraRef}
-            style={styles.camera}
-            facing="front"
-            flash="auto"
-            ratio="16:9"
-            onMountError={(error) => {
-              console.error("Camera error:", error);
-              Alert.alert("Camera Error", "Failed to start camera");
-            }}
-          >
+          <CameraView ref={cameraRef} style={styles.camera} facing={"front"}>
             <View style={styles.cameraOverlay}>
               <View style={styles.cameraHeader}>
                 <Button
@@ -305,8 +296,18 @@ export default function CameraScreen() {
                 <AnalysisResult result={analysisResult} />
                 <View style={styles.actionsContainer}>
                   <Button
-                    label="Save Analysis"
+                    label="View Personalized Routine"
                     variant="primary"
+                    onPress={goToRoutine}
+                    fullWidth
+                    leftIcon={
+                      <Ionicons name="list-outline" size={20} color="#fff" />
+                    }
+                    style={styles.actionButton}
+                  />
+                  <Button
+                    label="Save Analysis"
+                    variant="outline"
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                       Alert.alert(
@@ -320,14 +321,14 @@ export default function CameraScreen() {
                       <Ionicons
                         name="bookmark-outline"
                         size={20}
-                        color="#fff"
+                        color={Colors.light.tint}
                       />
                     }
-                    style={styles.actionButton}
+                    style={[styles.actionButton, styles.secondaryActionButton]}
                   />
                   <Button
                     label="Take New Photo"
-                    variant="outline"
+                    variant="ghost"
                     onPress={resetCamera}
                     fullWidth
                     style={styles.newPhotoButton}
@@ -515,5 +516,8 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: Theme.typography.fontSizes.sm,
     textAlign: "center",
+  },
+  secondaryActionButton: {
+    marginTop: Theme.spacing.md,
   },
 });

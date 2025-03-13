@@ -39,4 +39,4 @@ module.exports = {
         scheme: "acneapp", // Adding a URL scheme for deep linking
         newArchEnabled: true // Enabling new architecture
     }
-}; 
+};

@@ -19,6 +19,11 @@ export default function HomeScreen() {
     router.push("/camera");
   };
 
+  const navigateToRoutine = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    router.push("/routine");
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -59,6 +64,17 @@ export default function HomeScreen() {
             fullWidth
             style={styles.actionButton}
             hapticStyle={Haptics.ImpactFeedbackStyle.Heavy}
+          />
+
+          <Button
+            label="View My Routine"
+            variant="primary"
+            leftIcon={
+              <Ionicons name="calendar-outline" size={20} color="#fff" />
+            }
+            onPress={navigateToRoutine}
+            fullWidth
+            style={styles.actionButton}
           />
         </Card>
 
@@ -101,6 +117,17 @@ export default function HomeScreen() {
           </View>
         </Card>
       </ScrollView>
+
+      <View style={styles.bottomButtonContainer}>
+        <Button
+          label="Go to My Routine"
+          variant="primary"
+          size="lg"
+          leftIcon={<Ionicons name="list-outline" size={22} color="#fff" />}
+          onPress={navigateToRoutine}
+          fullWidth
+        />
+      </View>
     </SafeAreaView>
   );
 }
@@ -168,5 +195,11 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Theme.typography.fontSizes.md,
     color: Colors.light.text,
+  },
+  bottomButtonContainer: {
+    padding: Theme.spacing.lg,
+    backgroundColor: Colors.light.background,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.border,
   },
 });
