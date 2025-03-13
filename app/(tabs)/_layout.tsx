@@ -1,7 +1,7 @@
 import { Tabs } from "expo-router";
 import React from "react";
 import { Platform } from "react-native";
-import { FontAwesome } from "@expo/vector-icons";
+import { FontAwesome, Ionicons } from "@expo/vector-icons";
 
 export default function TabLayout() {
   return (
@@ -29,6 +29,15 @@ export default function TabLayout() {
           title: "Explore",
           tabBarIcon: ({ color }) => (
             <FontAwesome size={28} name="paper-plane" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="routine"
+        options={{
+          title: "Routine",
+          tabBarIcon: ({ color }) => (
+            <Ionicons size={28} name="list-outline" color={color} />
           ),
         }}
       />

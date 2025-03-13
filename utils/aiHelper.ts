@@ -1,7 +1,7 @@
 /**
  * AI Helper Utilities
  * 
- * Functions to enhance AI analysis capabilities with skin condition expertise
+ * Functions for AI analysis capabilities with skin condition expertise
  * and personalized recommendations.
  */
 
@@ -72,10 +72,10 @@ ${routine.weekly.map(step => `• ${step}`).join('\n')}
 }
 
 /**
- * Generates a better prompt for the AI based on the user's concerns and 
+ * Generates a prompt for the AI based on the user's concerns and 
  * references skin condition expertise.
  */
-export function generateEnhancedPrompt(userConcerns?: string[]): string {
+export function generateAnalysisPrompt(userConcerns?: string[]): string {
   const baseSkinConcerns = [
     "acne type identification (papules, pustules, nodules, cysts, comedones)",
     "severity assessment",
@@ -114,7 +114,7 @@ Make your advice extremely specific to what you observe in the image rather than
 }
 
 /**
- * Enhanced image analysis function that can be used as a replacement for the basic OpenAI analysis
+ * Image analysis function for skin assessment
  */
 export async function analyzeImageWithEnhancement(
   openaiClient: OpenAI,
@@ -122,8 +122,8 @@ export async function analyzeImageWithEnhancement(
   userConcerns?: string[]
 ): Promise<string> {
   try {
-    // Use an enhanced prompt with skin condition expertise
-    const enhancedPrompt = generateEnhancedPrompt(userConcerns);
+    // Use the analysis prompt
+    const analysisPrompt = generateAnalysisPrompt(userConcerns);
     
     // Call the OpenAI API
     const response = await openaiClient.chat.completions.create({
@@ -138,7 +138,7 @@ export async function analyzeImageWithEnhancement(
           content: [
             {
               type: "text",
-              text: enhancedPrompt
+              text: analysisPrompt
             },
             {
               type: "image_url",
@@ -161,13 +161,13 @@ export async function analyzeImageWithEnhancement(
     
     return enhancedResult;
   } catch (error) {
-    console.error("Error in enhanced image analysis:", error);
+    console.error("Error in image analysis:", error);
     throw error;
   }
 }
 
 export default {
   enhanceAiResponse,
-  generateEnhancedPrompt,
+  generateAnalysisPrompt,
   analyzeImageWithEnhancement
 }; 

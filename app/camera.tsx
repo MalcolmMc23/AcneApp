@@ -9,16 +9,19 @@ import {
   ScrollView,
   SafeAreaView,
   Platform,
+  Animated,
 } from "react-native";
 import {
   CameraView,
   CameraCapturedPicture,
   useCameraPermissions,
 } from "expo-camera";
+import * as FaceDetector from "expo-face-detector";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import * as FileSystem from "expo-file-system";
 import * as Haptics from "expo-haptics";
+import * as ImageManipulator from "expo-image-manipulator";
 import { Ionicons } from "@expo/vector-icons";
 import OpenAI from "openai";
 import Constants from "expo-constants";
@@ -37,31 +40,70 @@ const openai = new OpenAI({
   dangerouslyAllowBrowser: true, // Required for React Native
 });
 
-// Add functions for image enhancement
-const enhanceImageForAnalysis = async (imageUri: string): Promise<string> => {
-  // For now, we'll just return the original URI
-  // In a real implementation, you could use a library like react-native-image-filter-kit
-  // or a cloud service to enhance the image
+// Add function to optimize image for analysis
+const optimizeImageForAnalysis = async (imageUri: string): Promise<string> => {
+  try {
+    // Use ImageManipulator to enhance the image
+    const manipResult = await ImageManipulator.manipulateAsync(
+      imageUri,
+      [
+        // Resize to optimal size for analysis while preserving detail
+        { resize: { width: 1024 } },
+        // Flip to match the natural view (front camera)
+        { flip: ImageManipulator.FlipType.Horizontal },
+      ],
+      { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+    );
 
-  console.log("Enhancing image for better quality analysis");
+    console.log("Image optimized for analysis");
+    return manipResult.uri;
+  } catch (error) {
+    console.error("Error optimizing image:", error);
+    // Return original image if enhancement fails
+    return imageUri;
+  }
+};
 
-  // On a real implementation you could manipulate the image here
-  // For example, adjusting brightness, contrast, etc.
-
-  return imageUri;
+// Check if the image has detectable faces
+const checkFaceDetection = async (imageUri: string): Promise<boolean> => {
+  try {
+    const options = { mode: FaceDetector.FaceDetectorMode.fast };
+    const detected = await FaceDetector.detectFacesAsync(imageUri, options);
+    return detected.faces.length > 0;
+  } catch (error) {
+    console.error("Face detection error:", error);
+    return true; // Continue with analysis even if face detection fails
+  }
 };
 
 export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [optimizing, setOptimizing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<string | null>(null);
-  const [enhancingImage, setEnhancingImage] = useState(false);
   const cameraRef = useRef<CameraView>(null);
   const router = useRouter();
+  const pulseAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     requestPermission();
+
+    // Setup pulse animation for face guide
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
   }, []);
 
   const takePicture = async () => {
@@ -74,21 +116,15 @@ export default function CameraScreen() {
           quality: 1, // Maximum quality (0 to 1)
           skipProcessing: false, // Ensure proper orientation
           exif: true, // Include EXIF data
+          base64: false, // Don't encode as base64 here for better performance
+          imageType: "jpg", // Use JPEG format for better detail in skin tones
+          isImageMirror: true, // Mirror image for front camera (more natural for selfies)
         });
 
         if (photo) {
-          // Show a message to indicate enhanced processing
-          Alert.alert(
-            "Enhancing Image",
-            "Processing your photo for best quality..."
-          );
-
-          // Apply a slight delay to show the processing message
-          setTimeout(() => {
-            setPhotoUri(photo.uri);
-            // Reset analysis state when taking a new picture
-            setAnalysisResult(null);
-          }, 500);
+          setPhotoUri(photo.uri);
+          // Reset analysis state when taking a new picture
+          setAnalysisResult(null);
         }
       } catch (error) {
         console.error("Error taking picture:", error);
@@ -102,7 +138,7 @@ export default function CameraScreen() {
     if (!photoUri) return;
 
     setAnalyzing(true);
-    setEnhancingImage(true);
+    setOptimizing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
@@ -113,16 +149,33 @@ export default function CameraScreen() {
         );
       }
 
-      // Enhanced image processing for better quality
-      const enhancedImageUri = await enhanceImageForAnalysis(photoUri);
-      setEnhancingImage(false);
+      // Check if face is detected in the image
+      const hasFace = await checkFaceDetection(photoUri);
+      if (!hasFace) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        Alert.alert(
+          "No Face Detected",
+          "We couldn't detect a face in your photo. Please take another photo with clearer lighting and make sure your face is in the frame.",
+          [{ text: "OK" }]
+        );
+        setAnalyzing(false);
+        setOptimizing(false);
+        return;
+      }
+
+      // Optimize the image for better detail extraction
+      const optimizedImageUri = await optimizeImageForAnalysis(photoUri);
+      setOptimizing(false);
 
       // Convert image to base64
-      const base64Image = await FileSystem.readAsStringAsync(enhancedImageUri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      const base64Image = await FileSystem.readAsStringAsync(
+        optimizedImageUri,
+        {
+          encoding: FileSystem.EncodingType.Base64,
+        }
+      );
 
-      // Use the enhanced image analysis utility
+      // Use the image analysis utility (without enhancement)
       const result = await analyzeImageWithEnhancement(openai, base64Image);
 
       // Update the UI with the analysis result
@@ -135,7 +188,7 @@ export default function CameraScreen() {
       setAnalysisResult(null);
     } finally {
       setAnalyzing(false);
-      setEnhancingImage(false);
+      setOptimizing(false);
     }
   };
 
@@ -205,11 +258,42 @@ export default function CameraScreen() {
                 <View style={{ width: 60 }} />
               </View>
 
-              {/* Add lighting instructions for better photos */}
+              {/* Enhanced lighting instructions for better photos */}
               <View style={styles.lightingTips}>
+                <Text style={styles.lightingTipsText}>For best analysis:</Text>
                 <Text style={styles.lightingTipsText}>
-                  For best results, take photos in good lighting
+                  • Use natural daylight or bright, even lighting
                 </Text>
+                <Text style={styles.lightingTipsText}>
+                  • Position face directly toward camera
+                </Text>
+                <Text style={styles.lightingTipsText}>
+                  • Avoid shadows on your face
+                </Text>
+              </View>
+
+              {/* Enhanced face alignment guide */}
+              <View style={styles.faceGuideContainer}>
+                <Animated.View
+                  style={[
+                    styles.faceGuide,
+                    {
+                      transform: [
+                        {
+                          scale: pulseAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [1, 1.05],
+                          }),
+                        },
+                      ],
+                      opacity: pulseAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.7, 1],
+                      }),
+                    },
+                  ]}
+                />
+                <Text style={styles.guideText}>Align face here</Text>
               </View>
 
               <View style={styles.cameraFooter}>
@@ -257,8 +341,8 @@ export default function CameraScreen() {
                   <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color={Colors.light.tint} />
                     <Text style={styles.loadingText}>
-                      {enhancingImage
-                        ? "Enhancing image quality..."
+                      {optimizing
+                        ? "Optimizing image..."
                         : "Analyzing your skin..."}
                     </Text>
                   </View>
@@ -519,5 +603,33 @@ const styles = StyleSheet.create({
   },
   secondaryActionButton: {
     marginTop: Theme.spacing.md,
+  },
+  faceGuideContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: Theme.spacing.md,
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 5,
+  },
+  faceGuide: {
+    width: 240,
+    height: 320,
+    borderRadius: 160,
+    borderWidth: 2,
+    borderColor: "rgba(255, 255, 255, 0.7)",
+    backgroundColor: "transparent",
+  },
+  guideText: {
+    color: "#fff",
+    fontSize: Theme.typography.fontSizes.sm,
+    marginTop: Theme.spacing.xl,
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    paddingHorizontal: Theme.spacing.md,
+    paddingVertical: Theme.spacing.sm,
+    borderRadius: Theme.borderRadius.md,
   },
 });
