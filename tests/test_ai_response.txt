@@ -1,0 +1,19 @@
+BEGIN_MORNING_TASKS
+TASK: Cleanse with a gentle pH-balanced cleanser that doesn't strip your skin 🌞
+TASK: Apply a light 2.5% benzoyl peroxide gel to active acne spots only 🌞
+TASK: Use a non-comedogenic moisturizer with ceramides to repair your skin barrier 🌞
+TASK: Apply broad-spectrum SPF 30+ sunscreen (oil-free formula) 🌞
+END_MORNING_TASKS
+
+BEGIN_EVENING_TASKS
+TASK: Double cleanse - first with oil cleanser to remove sunscreen, then with gentle foaming cleanser 🌙
+TASK: Apply 0.025% tretinoin cream (start every third night until your skin adjusts) 🌙
+TASK: Wait 20 minutes, then apply a hydrating serum with niacinamide (4-5%) 🌙
+TASK: Finish with a healing moisturizer containing centella asiatica 🌙
+END_EVENING_TASKS
+
+BEGIN_WEEKLY_TASKS
+TASK: Use a 2% salicylic acid treatment once a week (avoid using on same day as tretinoin) 📅
+TASK: Apply a sulfur mask to problem areas for 10 minutes 📅
+TASK: Change pillowcase twice weekly to prevent bacterial transfer 📅
+END_WEEKLY_TASKS

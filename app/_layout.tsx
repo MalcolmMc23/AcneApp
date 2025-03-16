@@ -25,7 +25,6 @@ export default function RootLayout() {
       <View style={styles.container}>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" redirect={true} />
-          <Stack.Screen name="onboarding" />
           <Stack.Screen name="login" />
           <Stack.Screen name="camera" />
           <Stack.Screen name="routine" />

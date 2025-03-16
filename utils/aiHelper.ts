@@ -245,7 +245,9 @@ Include the following in your recommendations:
 Be specific about product ingredients and concentrations (e.g., "Apply 2.5% benzoyl peroxide to affected areas").
 Add specific emojis for visual cues: 🌞 for morning tasks, 🌙 for evening tasks, and 📅 for weekly tasks.
 
-Base your recommendations on what you observe in the image - be specific about the type of acne or skin conditions present and tailor the tasks accordingly.`;
+Base your recommendations on what you observe in the image - be specific about the type of acne or skin conditions present and tailor the tasks accordingly.
+
+DO NOT include any text outside the BEGIN/END markers. Your response should ONLY contain the three sections with their BEGIN/END markers and the tasks within them. Any explanations or additional text will break the parsing system.`;
 }
 
 /**
@@ -253,15 +255,25 @@ Base your recommendations on what you observe in the image - be specific about t
  */
 export function parseTasksFromAIResponse(aiResponse: string): { id: string; text: string; completed: boolean }[] {
   try {
+    console.log("Parsing AI response for tasks...");
     const tasks: { id: string; text: string; completed: boolean }[] = [];
     
+    // Normalize the response - remove any extra whitespace and ensure consistent newlines
+    const normalizedResponse = aiResponse.trim().replace(/\r\n/g, '\n');
+    
+    // Log the first 100 characters for debugging
+    console.log("Response preview:", normalizedResponse.substring(0, 100));
+    
     // Extract morning tasks
-    const morningTasksMatch = aiResponse.match(/BEGIN_MORNING_TASKS\n([\s\S]*?)\nEND_MORNING_TASKS/);
+    const morningTasksMatch = normalizedResponse.match(/BEGIN_MORNING_TASKS\n([\s\S]*?)\nEND_MORNING_TASKS/);
     if (morningTasksMatch && morningTasksMatch[1]) {
+      console.log("Found morning tasks section");
       const morningTaskLines = morningTasksMatch[1]
         .split('\n')
         .filter(line => line.trim().startsWith('TASK:'));
         
+      console.log(`Found ${morningTaskLines.length} morning tasks`);
+      
       morningTaskLines.forEach((line, index) => {
         const taskText = line.replace('TASK:', '').trim();
         // Add morning emoji if not already present
@@ -272,15 +284,20 @@ export function parseTasksFromAIResponse(aiResponse: string): { id: string; text
           completed: false
         });
       });
+    } else {
+      console.log("Morning tasks section not found");
     }
     
     // Extract evening tasks
-    const eveningTasksMatch = aiResponse.match(/BEGIN_EVENING_TASKS\n([\s\S]*?)\nEND_EVENING_TASKS/);
+    const eveningTasksMatch = normalizedResponse.match(/BEGIN_EVENING_TASKS\n([\s\S]*?)\nEND_EVENING_TASKS/);
     if (eveningTasksMatch && eveningTasksMatch[1]) {
+      console.log("Found evening tasks section");
       const eveningTaskLines = eveningTasksMatch[1]
         .split('\n')
         .filter(line => line.trim().startsWith('TASK:'));
         
+      console.log(`Found ${eveningTaskLines.length} evening tasks`);
+      
       eveningTaskLines.forEach((line, index) => {
         const taskText = line.replace('TASK:', '').trim();
         // Add evening emoji if not already present
@@ -291,15 +308,20 @@ export function parseTasksFromAIResponse(aiResponse: string): { id: string; text
           completed: false
         });
       });
+    } else {
+      console.log("Evening tasks section not found");
     }
     
     // Extract weekly tasks
-    const weeklyTasksMatch = aiResponse.match(/BEGIN_WEEKLY_TASKS\n([\s\S]*?)\nEND_WEEKLY_TASKS/);
+    const weeklyTasksMatch = normalizedResponse.match(/BEGIN_WEEKLY_TASKS\n([\s\S]*?)\nEND_WEEKLY_TASKS/);
     if (weeklyTasksMatch && weeklyTasksMatch[1]) {
+      console.log("Found weekly tasks section");
       const weeklyTaskLines = weeklyTasksMatch[1]
         .split('\n')
         .filter(line => line.trim().startsWith('TASK:'));
         
+      console.log(`Found ${weeklyTaskLines.length} weekly tasks`);
+      
       weeklyTaskLines.forEach((line, index) => {
         const taskText = line.replace('TASK:', '').trim();
         // Add weekly emoji if not already present
@@ -310,30 +332,130 @@ export function parseTasksFromAIResponse(aiResponse: string): { id: string; text
           completed: false
         });
       });
+    } else {
+      console.log("Weekly tasks section not found");
     }
     
-    // If no structured tasks found, fall back to original parsing method
+    // Try alternative parsing if needed (looking for sections without the exact format)
+    if (tasks.length === 0) {
+      console.warn("No structured tasks found, trying alternative parsing methods");
+      
+      // Look for sections that might contain the keywords but not the exact format
+      const morningSection = normalizedResponse.match(/morning[^]*?tasks?[^]*?(.*?)(evening|weekly|$)/i);
+      const eveningSection = normalizedResponse.match(/evening[^]*?tasks?[^]*?(.*?)(morning|weekly|$)/i);
+      const weeklySection = normalizedResponse.match(/weekly[^]*?tasks?[^]*?(.*?)(morning|evening|$)/i);
+      
+      // Function to extract task-like lines
+      const extractTaskLines = (section: RegExpMatchArray | null): string[] => {
+        if (!section || !section[1]) return [];
+        return section[1]
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => 
+            line.length > 10 && 
+            !line.startsWith('#') && 
+            !line.match(/task/i) &&
+            !line.match(/routine/i) &&
+            !line.match(/^[0-9]+\./)
+          );
+      };
+      
+      // Extract potential tasks
+      const morningLines = extractTaskLines(morningSection);
+      const eveningLines = extractTaskLines(eveningSection);
+      const weeklyLines = extractTaskLines(weeklySection);
+      
+      // Add tasks with appropriate IDs
+      morningLines.forEach((line, index) => {
+        tasks.push({
+          id: `morning_${index + 1}`,
+          text: `${line} 🌞`,
+          completed: false
+        });
+      });
+      
+      eveningLines.forEach((line, index) => {
+        tasks.push({
+          id: `evening_${index + 1}`,
+          text: `${line} 🌙`,
+          completed: false
+        });
+      });
+      
+      weeklyLines.forEach((line, index) => {
+        tasks.push({
+          id: `weekly_${index + 1}`,
+          text: `${line} 📅`,
+          completed: false
+        });
+      });
+    }
+    
+    // Last resort: extract any line that looks like a skincare task
     if (tasks.length === 0) {
       console.warn("Structured task format not found, falling back to basic parsing");
-      const taskLines = aiResponse.split('\n').filter(line => 
-        line.trim().startsWith('TASK:')
-      );
       
-      return taskLines.map((line, index) => {
-        const taskText = line.replace('TASK:', '').trim();
+      // Look for lines that might be tasks
+      const potentialTaskLines = normalizedResponse
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => 
+          // Filter lines that look like tasks
+          (line.includes('cleanse') || 
+           line.includes('apply') || 
+           line.includes('use') || 
+           line.includes('moisturize') ||
+           line.includes('exfoliate') ||
+           line.includes('sunscreen')) &&
+          line.length > 10 &&
+          !line.includes('BEGIN_') &&
+          !line.includes('END_')
+        );
+      
+      return potentialTaskLines.map((line, index) => {
+        // Determine the likely category
+        let category = 'other';
+        if (line.toLowerCase().includes('morning') || line.includes('🌞')) {
+          category = 'morning';
+        } else if (line.toLowerCase().includes('evening') || line.toLowerCase().includes('night') || line.includes('🌙')) {
+          category = 'evening';
+        } else if (line.toLowerCase().includes('weekly') || line.toLowerCase().includes('once a week') || line.includes('📅')) {
+          category = 'weekly';
+        }
+        
+        // Add appropriate emoji if missing
+        let taskText = line;
+        if (category === 'morning' && !taskText.includes('🌞')) {
+          taskText += ' 🌞';
+        } else if (category === 'evening' && !taskText.includes('🌙')) {
+          taskText += ' 🌙';
+        } else if (category === 'weekly' && !taskText.includes('📅')) {
+          taskText += ' 📅';
+        }
+        
         return {
-          id: `task_${index + 1}`,
+          id: `${category}_${index + 1}`,
           text: taskText,
           completed: false
         };
       });
     }
     
+    console.log(`Total tasks extracted: ${tasks.length}`);
     return tasks;
   } catch (error) {
     console.error("Error parsing tasks from AI response:", error);
-    // Return empty array in case of error
-    return [];
+    // Return fallback tasks in case of error
+    return [
+      { id: "morning_1", text: "Cleanse with gentle cleanser 🌞", completed: false },
+      { id: "morning_2", text: "Apply moisturizer 🌞", completed: false },
+      { id: "morning_3", text: "Apply sunscreen SPF 30+ 🌞", completed: false },
+      { id: "evening_1", text: "Double cleanse to remove makeup/sunscreen 🌙", completed: false },
+      { id: "evening_2", text: "Apply treatment serum 🌙", completed: false },
+      { id: "evening_3", text: "Apply moisturizer 🌙", completed: false },
+      { id: "weekly_1", text: "Exfoliate once a week 📅", completed: false },
+      { id: "weekly_2", text: "Use a hydrating mask 📅", completed: false },
+    ];
   }
 }
 
@@ -354,7 +476,7 @@ export async function analyzeImageForTasks(
       messages: [
         {
           role: "system",
-          content: "You are a dermatology AI assistant specialized in creating personalized skincare routines based on facial analysis. Your goal is to create actionable, specific tasks for the user's skincare routine based on what you observe in their skin. IMPORTANT: You MUST follow the exact formatting instructions in the user's request, using the BEGIN_TASKS/END_TASKS markers exactly as specified."
+          content: "You are a dermatology AI assistant specialized in creating personalized skincare routines based on facial analysis. Your primary goal is to create actionable, specific tasks for the user's skincare routine based on what you observe in their skin. DO NOT include any explanatory text - ONLY output the exact format with BEGIN/END markers as specified in the user's request. Any additional text will break the system."
         },
         {
           role: "user",
@@ -373,7 +495,7 @@ export async function analyzeImageForTasks(
         },
       ],
       max_tokens: 1000,
-      temperature: 0.5, // Lower temperature for more consistent formatting
+      temperature: 0.4, // Lower temperature for more consistent formatting
     });
     
     // Extract the AI's task list
@@ -391,32 +513,32 @@ export async function analyzeImageForTasks(
         messages: [
           {
             role: "system",
-            content: "You are a dermatology AI assistant creating structured skincare routines. You MUST follow the exact format shown below with the BEGIN_TASKS/END_TASKS markers:"
+            content: "You are a dermatology AI assistant creating structured skincare routines. You MUST follow the EXACT format below with no deviations. Your entire response should ONLY contain these sections with tasks, nothing else."
           },
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: `Analyze this photo and create a structured skincare routine. Your response MUST follow this EXACT format:
+                text: `Analyze this photo and create a structured skincare routine. Your response MUST follow this EXACT format, with no additional text or explanations:
 
 BEGIN_MORNING_TASKS
-TASK: Cleanse with gentle cleanser
-TASK: Apply treatment product
-TASK: Apply moisturizer
-TASK: Apply sunscreen
+TASK: Cleanse with gentle cleanser 🌞
+TASK: Apply treatment product 🌞
+TASK: Apply moisturizer 🌞
+TASK: Apply sunscreen 🌞
 END_MORNING_TASKS
 
 BEGIN_EVENING_TASKS
-TASK: Remove makeup/sunscreen
-TASK: Cleanse face
-TASK: Apply treatment
-TASK: Apply moisturizer
+TASK: Remove makeup/sunscreen 🌙
+TASK: Cleanse face 🌙
+TASK: Apply treatment 🌙
+TASK: Apply moisturizer 🌙
 END_EVENING_TASKS
 
 BEGIN_WEEKLY_TASKS
-TASK: Exfoliate once a week
-TASK: Use hydrating mask
+TASK: Exfoliate once a week 📅
+TASK: Use hydrating mask 📅
 END_WEEKLY_TASKS`
               },
               {
@@ -433,7 +555,61 @@ END_WEEKLY_TASKS`
       });
       
       const retryResult = retryResponse.choices[0]?.message?.content || "No analysis available";
-      return parseTasksFromAIResponse(retryResult);
+      const retryTasks = parseTasksFromAIResponse(retryResult);
+      
+      // If we still don't have tasks, try one more time with a simpler approach
+      if (retryTasks.length === 0) {
+        console.warn("Second task generation attempt returned no tasks, trying final approach");
+        
+        const finalResponse = await openaiClient.chat.completions.create({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "system",
+              content: "You are generating a skincare routine in a specific format. Output ONLY the exact format below."
+            },
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: `Look at this skin photo and provide ONLY this format with your recommendations - nothing else:
+
+BEGIN_MORNING_TASKS
+TASK: Task 1 🌞
+TASK: Task 2 🌞
+TASK: Task 3 🌞
+END_MORNING_TASKS
+
+BEGIN_EVENING_TASKS
+TASK: Task 1 🌙
+TASK: Task 2 🌙
+TASK: Task 3 🌙
+END_EVENING_TASKS
+
+BEGIN_WEEKLY_TASKS
+TASK: Task 1 📅
+TASK: Task 2 📅
+END_WEEKLY_TASKS`
+                },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: `data:image/jpeg;base64,${base64Image}`,
+                  },
+                },
+              ],
+            },
+          ],
+          max_tokens: 1000,
+          temperature: 0.2,
+        });
+        
+        const finalResult = finalResponse.choices[0]?.message?.content || "No analysis available";
+        return parseTasksFromAIResponse(finalResult);
+      }
+      
+      return retryTasks;
     }
     
     return tasks;

@@ -11,6 +11,8 @@ export default function TabLayout() {
         headerShown: false,
         tabBarStyle: {
           backgroundColor: "#ffffff",
+          paddingBottom: 8,
+          height: 70,
         },
       }}
     >
@@ -20,15 +22,6 @@ export default function TabLayout() {
           title: "Home",
           tabBarIcon: ({ color }) => (
             <FontAwesome size={28} name="home" color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: "Explore",
-          tabBarIcon: ({ color }) => (
-            <FontAwesome size={28} name="paper-plane" color={color} />
           ),
         }}
       />
